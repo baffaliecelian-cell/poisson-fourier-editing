@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environnement virtuel
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Données et sorties (lourdes / regénérables)
+data/
+results/
+
+# Images générées, sauf les exemples du dépôt
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+!assets/**
+
+# Éditeur / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
