@@ -1,7 +1,11 @@
+import os, sys
+RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, RACINE)
+
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import load_grey, grad
-from solver import compute_f_hat, gradient_hat, solve_poisson
+from methodes.utils import load_grey, grad
+from methodes.solver import compute_f_hat, gradient_hat, solve_poisson
 
 def test_reconstruction(path):
     f = load_grey(path)
@@ -38,4 +42,4 @@ def test_reconstruction(path):
     plt.tight_layout()
     plt.show()
 
-test_reconstruction("KAZEA36IWVEMRNZ55KCRLLFPBY.jpg")
+test_reconstruction(os.path.join(RACINE, "images", "prairie.jpg"))

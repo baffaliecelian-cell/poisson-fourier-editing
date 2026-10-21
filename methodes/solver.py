@@ -1,5 +1,5 @@
 import numpy as np
-from utils import extend_symmetric
+from methodes.utils import extend_symmetric
 #coefficients de Fourier de f sur le domaine quadruplé 
 def compute_f_hat(f):
     fe = extend_symmetric(f)   # image 2H x 2W, symétrique et périodique
