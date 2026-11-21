@@ -1,0 +1,11 @@
+﻿radio_thorax.jpg : Wikimedia Commons, « Normal posteroanterior (PA) chest radiograph (X-ray).jpg », Mikael Häggström, CC0
+radio_thorax_nodule.jpg : Wikimedia Commons, « Chest x-ray of discrete nodule and volume loss.jpg », Basem Abbas Al Ubaidi, CC BY 4.0
+radio_thorax_sarcoidose.png : Wikimedia Commons, « Chest X-ray of sarcoidosis nodules.png », Mikael Häggström, CC0
+fond_oeil.jpg : Wikimedia Commons, « Fundus photograph-normal retina EDA06.JPG », domaine public
+irm_cerveau_1.jpg : Wikimedia Commons, « MRI Brain T1 Axial (4).jpg », 511KeV, CC BY-SA 4.0
+irm_cerveau_2.jpg : Wikimedia Commons, « MRI Brain T1 Axial (9).jpg », 511KeV, CC BY-SA 4.0
+radio_main.jpg : Wikimedia Commons, « X-ray of normal hand by dorsoplantar projection.jpg », Mikael Häggström, CC0
+radio_genou.jpg : Wikimedia Commons, « Knee plain X-ray weight bearing.jpg », Ptrump16, CC BY-SA 4.0
+scanner_tete_3d.tif : scikit-image, skimage.data.brain() (volume de tête, os très clair : scanner X, 10 coupes 256 x 256, uint16)
+irm_3d/irm_cerveau_3d_T1.nii.gz : OpenNeuro ds000001 (Schonberg et al., 2012), sub-01/anat/sub-01_T1w.nii.gz, CC0
+masques_PA000203/ : segmentations reçues (artères pulmonaires GTORI2, bronches NESRIN2), pas d'image en niveaux de gris
