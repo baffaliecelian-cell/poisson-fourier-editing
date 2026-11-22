@@ -114,11 +114,11 @@ Radio de la main ($994\times700$) & spectral & $9{,}9\cdot10^{-28}$ & 318 & $2{,
 IRM du cerveau ($700\times700$) & spectral & $2{,}1\cdot10^{-28}$ & 325 & $8{,}5\cdot10^{-14}$ \\
                                 & différences finies & $5{,}0$ & 41 & 25 \\
 \midrule
-Article, table 1 & & $5\cdot10^{-5}$ à $6\cdot10^{-3}$ & 69 à 96 & $0{,}005$ à $0{,}11$\\
+Article, table 1 & & $10^{-5}$ à $6\cdot10^{-3}$ & 69 à 96 & $0{,}005$ à $0{,}11$\\
 \bottomrule
 \end{tabular}
 \caption{Reconstruction de $f$ à partir de son propre gradient. Avec le gradient spectral, l'erreur est
-celle de l'arithmétique de la machine. Chaque résolution prend entre 0,2 et 0,4\,s.}
+celle de l'arithmétique de la machine. Chaque résolution prend entre 0,3 et 0,9\,s.}
 \label{tab:valid}
 \end{table}
 
@@ -257,7 +257,7 @@ une homothétie, pour que le maximum soit 255 :
 C'est une fonction affine croissante de $u$ : elle ne change pas l'ordre des niveaux de gris, elle multiplie
 tous les contrastes par le même facteur $255/(\max u - \min u)$, et aucun pixel n'est écrêté. Sur la
 figure~\ref{fig:contraste_simple}c, $u$ va de $-56$ à $228$ (facteur 0,90) ; le grand carré revient vers
-31 et le fond monte à 238, et le petit carré reste bien distinct. C'est cet étirement que j'applique à
+26 et le fond monte à 238, et le petit carré reste bien distinct. C'est cet étirement que j'applique à
 tous les résultats de contraste de la suite.
 
 Il a deux défauts.
@@ -274,18 +274,14 @@ Il a deux défauts.
   \item \textbf{Il fait apparaître des taches de couleur.} Pour une image couleur, j'applique l'éq.~15 à
   la luminance, puis je multiplie les trois canaux par le rapport $v/f$. Pour un pixel presque noir, $f$
   est proche de 0 et ce rapport devient très grand : le moindre écart entre canaux, dû à la compression
-  JPEG, devient une tache de couleur vive (figure~\ref{fig:taches}b). Je l'ai corrigé en ajoutant une
-  petite constante $\varepsilon$ : les canaux deviennent $(c+\varepsilon)\,v/(f+\varepsilon)$. La
-  luminance reste égale à $v$, mais les pixels presque noirs deviennent gris au lieu de prendre une
-  couleur au hasard. Avec $\varepsilon=10$, les taches disparaissent sans que les couleurs changent
-  ailleurs (figure~\ref{fig:taches}c).
+  JPEG, devient une tache de couleur vive (figure~\ref{fig:taches}b).
 \end{itemize}
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\linewidth]{article_taches.png}
 \caption{Berge du lac de la figure~5 de l'article, après l'éq.~15 et l'étirement. (b) Couleur obtenue en
-multipliant les canaux par $v/f$ : taches dans les zones presque noires. (c) Avec $\varepsilon = 10$.}
+multipliant les canaux par $v/f$ : taches dans les zones presque noires.}
 \label{fig:taches}
 \end{figure}
 
@@ -364,8 +360,7 @@ premier défaut décrit à la section~\ref{sec:etirement}.
 \centering
 \includegraphics[width=\linewidth]{article_contraste.png}
 \caption{Figures 3 à 5 de l'article ($T=50$, $\alpha=2{,}5$). De gauche à droite : image d'origine, résultat
-publié, $u$ affiché en écrêtant, $u$ après l'étirement min-max, et avec la correction des couleurs
-($\varepsilon=10$). Images tirées de \cite{morel}.}
+publié, $u$ affiché en écrêtant et $u$ après l'étirement min-max. Images tirées de \cite{morel}.}
 \label{fig:article_contraste}
 \end{figure}
 
@@ -402,7 +397,7 @@ résultat (c, e) est ramené dans $[0,255]$ par l'étirement min-max.}
 
 Sur une radio du thorax, le seuil fixe $T=50$ de l'article ne sélectionne presque rien (3\,\% des
 pixels) : il a été choisi pour des photographies. Le seuil automatique (25\,\% de l'image) donne $T=101$
-et sélectionne les poumons (figure~\ref{fig:thorax}b). Après l'éq.~15, en 1\,s, la trame vasculaire des
+et sélectionne les poumons (figure~\ref{fig:thorax}b). Après l'éq.~15, en 1,5\,s, la trame vasculaire des
 poumons est nettement plus visible (figure~\ref{fig:thorax}e). On retrouve le défaut de la
 section~\ref{sec:phenomenes} : la moyenne des poumons descend de 75 à 46, et les zones les plus sombres
 passent sous 0 (4\,\% des pixels). Après l'étirement min-max, les poumons ne sont plus noirs (moyenne
@@ -493,7 +488,7 @@ Sur un vrai scanner de tête (figure~\ref{fig:scanner}), le cerveau est très so
 (niveau médian 50). Avec $T=60$, l'éq.~15 en 3D le remonte à 94 et fait apparaître ses variations de
 densité, tout en gardant l'os intact. Ici le cerveau, entouré d'os clair, ne passe pas sous 0 : c'est
 l'air autour de la tête qui y passe. Après l'étirement (facteur 0,53), le cerveau vaut 83, toujours bien
-plus clair qu'au départ. Le calcul prend 4,2\,s pour un volume prolongé de $512\times512\times20$
+plus clair qu'au départ. Le calcul prend 6,2\,s pour un volume prolongé de $512\times512\times20$
 voxels.
 
 \begin{figure}[h]
@@ -519,7 +514,7 @@ complet ferait $320\times384\times384\approx 47$ millions de voxels, soit 755\,M
 coefficients complexes, et le calcul en garde plusieurs en mémoire ; j'ai donc réduit le volume d'un
 facteur 2 (moyenne de $2\times2\times2$ voxels) avant d'appliquer l'éq.~15. Avec $T=60$, la zone sombre
 contient l'air, le liquide cérébrospinal et l'os cortical, soit 75\,\% du volume réduit ; le calcul prend
-5,1\,s. Comme sur le fantôme, la différence entre 3D et coupe par coupe se voit dans la direction $z$
+6,2\,s. Comme sur le fantôme, la différence entre 3D et coupe par coupe se voit dans la direction $z$
 (figure~\ref{fig:irm_contraste}) : coupe par coupe, chaque coupe axiale reçoit son propre décalage et
 des stries horizontales apparaissent sur les coupes sagittale et coronale. L'écart moyen au gradient
 voulu entre deux coupes voisines vaut 9,6 coupe par coupe, contre 5,4 en 3D, où aucune strie n'est

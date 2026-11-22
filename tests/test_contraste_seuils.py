@@ -26,6 +26,7 @@ def run(img, f, T, nom):
     Image.fromarray(res).save(os.path.join(RACINE, "results", f"resultat_T{T:.0f}.png"))
     return res
 
+# compare le seuil fixe T_fixe et le seuil automatique (25 % de l'image)
 def test_contrast(path):
     img = load_rgb(path)
     f = load_grey(path)

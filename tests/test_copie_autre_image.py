@@ -14,6 +14,7 @@ def charge(nom, w=None):
         im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
     return np.array(im, dtype=float)
 
+# affiche les images côte à côte, en niveaux de gris entre 0 et 255
 def affiche(images, titres):
     fig, ax = plt.subplots(1, len(images), figsize=(5 * len(images), 5))
     for a, im, t in zip(ax, images, titres):

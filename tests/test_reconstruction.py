@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from methodes.utils import load_grey, grad
 from methodes.solver import compute_f_hat, gradient_hat, solve_poisson
 
+# vérifie le solveur : en partant de V = grad f, on doit retrouver f exactement
 def test_reconstruction(path):
     f = load_grey(path)
     H, W = f.shape

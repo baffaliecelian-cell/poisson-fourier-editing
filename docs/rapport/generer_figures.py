@@ -21,26 +21,31 @@ MED = os.path.join(RACINE, "images", "medicales")
 os.makedirs(FIG, exist_ok=True)
 plt.rcParams.update({"font.size": 9, "axes.titlesize": 9})
 
+# charge une image médicale en niveaux de gris, réduite à la largeur w si besoin
 def charge(nom, w=None):
     im = Image.open(os.path.join(MED, nom)).convert("L")
     if w:
         im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
     return np.array(im, dtype=float)
 
+# affiche une image dans l'axe a, sans interpolation pour voir les vrais pixels
 def montre(a, im, titre, vmin=0, vmax=255, cmap="gray"):
     a.imshow(im, cmap=cmap, vmin=vmin, vmax=vmax, interpolation="none")
     a.set_title(titre)
     a.axis("off")
 
+# enregistre la figure courante dans le dossier des figures du rapport, puis la ferme
 def sauve(nom):
     plt.savefig(os.path.join(FIG, nom), dpi=200, bbox_inches="tight")
     plt.close("all")
 
+# gradient spectral (éq. 13) ramené sur l'image H x W
 def grad_spectral(f):
     H, W = f.shape
     V1_hat, V2_hat = gradient_hat(compute_f_hat(f))
     return np.fft.ifft2(V1_hat).real[:H, :W], np.fft.ifft2(V2_hat).real[:H, :W]
 
+# carré clair (200) sur fond sombre (50)
 def carre(N=128, a=40, b=88):
     f = np.full((N, N), 50.0)
     f[a:b, a:b] = 200
@@ -93,8 +98,14 @@ f[48:208, 48:208] = 35
 f[98:158, 98:158] += 8
 u = contrast_enhance(f, 50, 2.5)
 v = etire(u)
-print("fond", u[10, 10], "grand carré", u[60, 60], "petit carré", u[128, 128], "| u de", u.min(), "à", u.max())
-print("après étirement : fond", v[10, 10], "grand carré", v[60, 60], "petit carré", v[128, 128])
+fond = f > 100                              # zones de l'image, pour les moyennes
+petit = np.zeros_like(fond)
+petit[98:158, 98:158] = True
+grand = ~fond & ~petit
+for nom, x in [("éq. 15", u), ("après étirement", v)]:
+    print(f"{nom} : fond {x[fond].mean():.0f}, grand carré {x[grand].mean():.0f}, petit carré {x[petit].mean():.0f},"
+          f" écart petit - grand {x[petit].mean() - x[grand].mean():.1f}")
+print(f"u de {u.min():.0f} à {u.max():.0f}, facteur {255 / np.ptp(u):.2f}")
 fig, ax = plt.subplots(1, 4, figsize=(13, 3), gridspec_kw={"width_ratios": [1, 1, 1, 1.6]})
 montre(ax[0], f, "(a) original")
 montre(ax[1], u, "(b) éq. 15, affiché dans [0, 255]")
@@ -313,15 +324,18 @@ sauve("irm_contraste_3d.png")
 print("=== figures de l'article ===")
 ART = os.path.join(RACINE, "images", "article")
 
+# charge une figure de l'article en couleur, redimensionnée à taille = (H, W) si besoin
 def lit(nom, taille=None):
     im = Image.open(os.path.join(ART, nom)).convert("RGB")
     if taille is not None:
         im = im.resize((taille[1], taille[0]), Image.BILINEAR)
     return np.array(im, dtype=float)
 
+# luminance d'une image RGB (pondérations standard 0.299, 0.587, 0.114)
 def lum(img):
     return 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
 
+# affiche une image couleur dans l'axe a
 def couleur(a, img, titre):
     a.imshow(np.clip(img, 0, 255).astype(np.uint8))
     a.set_title(titre)
@@ -336,7 +350,7 @@ for k in ["fig3", "fig4", "fig5", "fig7"]:
     print(f"{k} : MSE {mse:.1e}, PSNR {10 * np.log10(255**2 / mse):.0f}, MD {np.abs(u - f).max():.1e}")
 
 # figures 3 à 5 : rehaussement de contraste
-fig, ax = plt.subplots(3, 5, figsize=(15, 6.6))
+fig, ax = plt.subplots(3, 4, figsize=(12, 6.6))
 for i, k in enumerate(["fig3", "fig4", "fig5"]):
     img = lit(k + "_1.png")
     H, W = img.shape[:2]
@@ -346,9 +360,8 @@ for i, k in enumerate(["fig3", "fig4", "fig5"]):
     v = etire(u)
     print(f"{k} : u de {u.min():.0f} à {u.max():.0f}, facteur {255 / np.ptp(u):.2f} ; zone sombre : f {f[f < 50].mean():.0f},"
           f" article {lum(publie)[f < 50].mean():.0f}, u {u[f < 50].mean():.0f}, étiré {v[f < 50].mean():.0f}")
-    titres = [f"fig. {k[3]}, original", "article", "éq. 15", "éq. 15 puis étirement", "étirement, eps = 10"]
-    for c, (a, im) in enumerate(zip(ax[i], [img, publie, color_from_grey(img, f, u), color_from_grey(img, f, v),
-                                            color_from_grey(img, f, v, eps=10)])):
+    titres = [f"fig. {k[3]}, original", "article", "éq. 15", "éq. 15 puis étirement"]
+    for c, (a, im) in enumerate(zip(ax[i], [img, publie, color_from_grey(img, f, u), color_from_grey(img, f, v)])):
         couleur(a, im, titres[c] if (i == 0 or c == 0) else "")
 sauve("article_contraste.png")
 
@@ -357,9 +370,9 @@ img = lit("fig5_1.png")
 f = lum(img)
 v = etire(contrast_enhance(f, 50, 2.5))
 zone = (slice(170, 282), slice(0, 260))
-fig, ax = plt.subplots(1, 3, figsize=(12, 2.4))
-for a, im, t in zip(ax, [img, color_from_grey(img, f, v), color_from_grey(img, f, v, eps=10)],
-                    ["(a) original", "(b) étirement, recoloration u / f", "(c) étirement, eps = 10"]):
+fig, ax = plt.subplots(1, 2, figsize=(8, 2.4))
+for a, im, t in zip(ax, [img, color_from_grey(img, f, v)],
+                    ["(a) original", "(b) étirement, recoloration u / f"]):
     couleur(a, im[zone], t)
 sauve("article_taches.png")
 

@@ -12,6 +12,7 @@ from methodes.collage import colle_gradient, colle_pixels, disque
 def recale(u, f):
     return (u - u.mean()) / u.std() * f.std() + f.mean()
 
+# erreurs entre u et f comme dans la table 1 : MSE, PSNR (dB) et écart max MD
 def mesures(u, f):
     mse = np.mean((u - f)**2)
     psnr = 10 * np.log10(255**2 / mse)

@@ -20,6 +20,7 @@ SORTIE = os.path.join(RACINE, "docs", "figures", "article")
 os.makedirs(SORTIE, exist_ok=True)
 
 
+# charge une image de l'article en couleur, redimensionnée à taille = (H, W) si besoin
 def lit(nom, taille=None):
     im = Image.open(os.path.join(DOSSIER, nom)).convert("RGB")
     if taille is not None:                       # taille = (H, W)
@@ -27,10 +28,12 @@ def lit(nom, taille=None):
     return np.array(im, dtype=float)
 
 
+# luminance d'une image RGB (pondérations standard 0.299, 0.587, 0.114)
 def gris(img):
     return 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
 
 
+# PSNR en dB entre a et b (calculé seulement dans le masque s'il est donné)
 def psnr(a, b, masque=None):
     d = (np.asarray(a, float) - np.asarray(b, float)) ** 2
     if masque is not None:
@@ -38,6 +41,7 @@ def psnr(a, b, masque=None):
     return 10 * np.log10(255 ** 2 / d.mean())
 
 
+# affiche les images côte à côte et sauvegarde la figure dans fichier
 def montre(images, titres, fichier):
     fig, ax = plt.subplots(1, len(images), figsize=(4.5 * len(images), 3.6))
     for a, im, t in zip(ax, images, titres):
@@ -85,7 +89,7 @@ for k in ["fig3", "fig4", "fig5"]:
     u = contrast_enhance(f, 50, 2.5)
     res = color_from_grey(img, f, u)
     v = etire(u)                                       # min -> 0, max -> 255
-    res_etire = color_from_grey(img, f, v, eps=10)
+    res_etire = color_from_grey(img, f, v)
     # pour comparer : le meilleur a u + b possible (moindres carrés sur le résultat publié)
     (a, b), *_ = np.linalg.lstsq(np.stack([u.ravel(), np.ones(u.size)], 1), gris(publie).ravel(), rcond=None)
     res_ideal = color_from_grey(img, f, np.clip(a * u + b, 0, 255))

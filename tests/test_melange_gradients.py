@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from methodes.collage import colle_gradient, melange_gradient, colle_couleur
 
+# affiche les images côte à côte, en niveaux de gris entre 0 et 255
 def affiche(images, titres):
     fig, ax = plt.subplots(1, len(images), figsize=(5 * len(images), 5))
     for a, im, t in zip(ax, images, titres):

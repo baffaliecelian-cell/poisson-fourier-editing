@@ -42,12 +42,10 @@ def etire(u):
     return (u - u.min()) * 255 / (u.max() - u.min())
 
 
-# recolore : R, G et B sont multipliés par u / f (fin de la section 4.1).
-# Avec eps > 0 on calcule u (R + eps) / (f + eps) : la luminance reste u, mais un pixel presque noir
-# devient gris au lieu de transformer son bruit de couleur en tache.
-def color_from_grey(img, f, u, eps=0):
-    ratio = u / np.maximum(f + eps, 1)       # le max évite de diviser par 0
-    out = (img + eps) * ratio[:, :, None]
+# recolore : R, G et B sont multipliés par u / f (fin de la section 4.1)
+def color_from_grey(img, f, u):
+    ratio = u / np.maximum(f, 1)             # le max évite de diviser par 0
+    out = img * ratio[:, :, None]
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
