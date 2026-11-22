@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from PIL import Image
-from scipy.ndimage import (gaussian_filter, rotate, uniform_filter, binary_closing, binary_opening,
+from scipy.ndimage import (gaussian_filter, uniform_filter, binary_closing, binary_opening,
                            binary_fill_holes)
 from methodes.utils import grad, extend_symmetric
 from methodes.solver import compute_f_hat, gradient_hat, solve_poisson
@@ -73,22 +73,32 @@ for nom in ["radio_thorax.jpg", "radio_main.jpg", "irm_cerveau_2.jpg", "fond_oei
               f"  ({duree:.2f} s)")
 
 
-# --- 2) Gibbs et interpolation
+# --- 2) Gibbs : gradient spectral d'un bord net, puis d'un bord flou
 print("=== Gibbs ===")
-fig, ax = plt.subplots(1, 4, figsize=(13, 2.8))
-for a, (nom, f) in zip(ax[:2], [("bord net", carre()), ("bord flou ($\\sigma$ = 1)", gaussian_filter(carre(), 1))]):
+# marche de hauteur 1 entre les pixels 0 et 1 : f'[k] = somme pour j >= k de (-1)^(j+1) / j  (k >= 1)
+def reste(k):
+    j = np.arange(k, 200000)
+    return np.sum((-1.0)**(j + 1) / j)
+print("formule x 150 :", [round(150 * reste(k), 1) for k in range(1, 5)])
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 3))
+for a, (titre, f) in zip(ax, [("(a) bord net", carre()), ("(b) bord flou ($\\sigma$ = 1)", gaussian_filter(carre(), 1))]):
     V1, V2 = grad_spectral(f)
     gx, gy = grad(f)
     a.plot(np.arange(25, 56), V2[64, 25:56], "o-", ms=3, label="gradient spectral")
     a.plot(np.arange(25, 56) + 0.5, gx[64, 25:56], "s--", ms=3, label="diff. finie (en k+1/2)")
-    a.set_title(f"(a) dérivée horizontale, {nom}" if a is ax[0] else f"(b) dérivée horizontale, {nom}")
+    a.set_title(titre + " : dérivée horizontale, ligne 64")
     a.set_xlabel("colonne")
-    print(nom, "valeurs spectrales autour du bord :", np.round(V2[64, 36:44], 1))
-ax[0].legend(fontsize=7, loc="lower right")
-for a, order, nom in [(ax[2], 0, "(c) rotation 45°, plus proche voisin"), (ax[3], 3, "(d) rotation 45°, bicubique")]:
-    r = rotate(carre(), 45, reshape=False, order=order, cval=50)
-    montre(a, np.hypot(*grad_spectral(r)), nom + " : |grad|", 0, 40)
+    print(titre, "valeurs spectrales autour du bord :", np.round(V2[64, 36:44], 1))
+k = np.arange(1, 9)
+pred = np.array([150 * reste(i) for i in k])
+ax[0].plot(39 + k, pred, "kx", ms=5, label="formule (reste de la série)")
+ax[0].plot(40 - k, pred, "kx", ms=5)
+ax[0].legend(fontsize=7, loc="upper right")
+ax[0].set_ylim(-60, 175)
 sauve("gibbs.png")
+
+
 
 
 # --- 3) contraste sur une image simple : pourquoi le sombre devient noir

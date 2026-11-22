@@ -4,9 +4,17 @@
 \usepackage[margin=2.3cm]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{booktabs}
 \usepackage[font=small,labelfont=bf]{caption}
 \usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\lstset{language=Python, basicstyle=\ttfamily\scriptsize, breaklines=true, columns=fullflexible,
+  keepspaces=true, numbers=left, numberstyle=\tiny\color{gray}, frame=single, rulecolor=\color{gray!50},
+  keywordstyle=\bfseries\color{blue!60!black}, commentstyle=\itshape\color{green!40!black},
+  stringstyle=\color{red!60!black}, showstringspaces=false,
+  literate={Δ}{{$\Delta$}}1 {α}{{$\alpha$}}1}
 
 \graphicspath{{figures/}}
 \newcommand{\ft}[1]{\widehat{#1}}
@@ -22,7 +30,7 @@
 
 \section{Introduction}
 
-L'édition de Poisson \cite{perez} modifie une image en imposant son gradient plutôt que ses valeurs :
+L'édition de Poisson modifie une image en imposant son gradient plutôt que ses valeurs :
 on choisit un champ de vecteurs $V$ (le gradient « voulu ») et on cherche l'image $u$ dont le gradient
 en est le plus proche. C'est ce qui permet de coller un objet sans laisser de couture, ou d'éclaircir
 une zone sans créer de bord visible. L'article de Morel, Petro et Sbert \cite{morel} propose de résoudre
@@ -50,7 +58,7 @@ L'équation d'Euler--Lagrange de ce problème est l'équation de Poisson $\Delta
 dans $R$, avec la condition de Neumann $\frac{\partial u}{\partial n} = V\cdot n$ au bord, qui est la
 condition « naturelle » de la minimisation. L'article prend un champ global :
 $V = v$ dans la zone modifiée $\Omega$ et $V = \nabla f$ ailleurs (éq.~5). Il n'y a donc pas de condition
-de Dirichlet sur le bord de $\Omega$, contrairement à Pérez et al. : on résout sur tout $R$.
+de Dirichlet sur le bord de $\Omega$, contrairement à l'édition de Poisson classique : on résout sur tout $R$.
 
 \subsection{Résolution par Fourier}
 
@@ -101,7 +109,7 @@ Comme on résout sur toute l'image, il faut vérifier qu'avec $V=\nabla f$ on re
 écart-type que $f$, puis je mesure l'erreur quadratique moyenne (MSE), le PSNR et l'écart maximal (MD).
 Le tableau~\ref{tab:valid} donne les résultats sur des images de la section~\ref{sec:medical}.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering\small
 \begin{tabular}{@{}llrrr@{}}
 \toprule
@@ -135,30 +143,44 @@ floutée. Le gradient et le solveur doivent donc être cohérents.
 
 \section{Phénomènes observés sur des images simples}\label{sec:phenomenes}
 
-\subsection{Le gradient spectral oscille autour des bords nets}
+Pour comprendre la méthode, j'ai utilisé des images dont on connaît tout : un carré clair (200) sur un
+fond sombre (50), de taille $128\times128$ (fichier \texttt{tests/test\_images\_simples.py}). Je l'ai
+modifié de deux façons, chacune testant une question différente :
+\begin{itemize}
+  \item un bord net ou flou : comment le gradient spectral se comporte-t-il sur un saut ?
+  (section~\ref{sec:gibbs}) ;
+  \item un bruit : la dérivée amplifie-t-elle le bruit ? (section~\ref{sec:bruit}).
+\end{itemize}
+Dans tous les cas, $V=\nabla f$ redonne $f$ à $10^{-13}$ près : aucune de ces images ne gêne la
+reconstruction. Ce qui change, c'est le gradient spectral lui-même, donc le résultat dès qu'on modifie ce
+gradient, comme dans le rehaussement de contraste (section~\ref{sec:contraste}).
 
-\begin{figure}[h]
+\subsection{Bord net : le gradient spectral oscille (effet de Gibbs)}\label{sec:gibbs}
+
+Le gradient spectral est la dérivée exacte, aux pixels, de la courbe trigonométrique
+$f(x) = \frac1N\sum_m \ft f_m e^{i w_m x}$ qui passe par tous les pixels. Pour un bord net, cette courbe
+ondule entre les pixels (effet de Gibbs), et sa dérivée aussi. Pour une marche de hauteur $\Delta$ entre
+les pixels 0 et 1, on peut le calculer : en espace, le gradient spectral est une convolution par le noyau
+$(-1)^j/j$, et le pixel situé à $k\ge1$ pixels du bord vaut
+\[
+  f'[k] = \Delta\sum_{j\ge k}\frac{(-1)^{j+1}}{j},
+  \qquad\text{soit}\quad \Delta\ln 2,\ \ \Delta(\ln2-1),\ \ \Delta\big(\ln2-\tfrac12\big),\ \dots
+\]
+(et de même de l'autre côté du bord). C'est un reste de la série harmonique alternée : il change de signe
+à chaque pixel et ne décroît qu'en $\Delta/(2k)$. Pour $\Delta=150$, la formule donne $104$, $-46$, $29$,
+$-21$, exactement les valeurs mesurées sur la figure~\ref{fig:gibbs}a. La différence finie, elle, vaut 150
+entre les deux pixels du bord et 0 ailleurs.
+
+\begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{gibbs.png}
-\caption{Carré clair (200) sur fond sombre (50), $128\times128$. (a) Bord net : le gradient spectral
-oscille de part et d'autre du bord, la différence finie non. (b) Bord flouté ($\sigma=1$ pixel) : les deux
-coïncident. (c, d) Norme du gradient spectral après une rotation de $45^\circ$ du carré : l'interpolation
-au plus proche voisin crée des marches d'escalier qui produisent des oscillations dans tout le carré.}
+\includegraphics[width=0.85\linewidth]{gibbs.png}
+\caption{Dérivée horizontale du carré, le long de la ligne 64. (a) Bord net : le gradient spectral oscille
+de part et d'autre du bord, la différence finie non ; les croix sont les valeurs données par la formule
+$\Delta\sum_{j\ge k}(-1)^{j+1}/j$. (b) Bord flouté ($\sigma=1$ pixel) : les deux coïncident.}
 \label{fig:gibbs}
 \end{figure}
 
-Pour tester le solveur, j'ai utilisé des images dont on connaît tout : un carré clair (200) sur un fond
-sombre (50), que j'ai flouté, tourné et bruité (fichier \texttt{tests/test\_images\_simples.py}). Dans tous
-les cas, $V=\nabla f$ redonne $f$ à $10^{-13}$ près : aucune de ces transformations ne gêne la
-reconstruction. Ce qui change, c'est le gradient spectral lui-même, et donc ce que l'on obtient dès qu'on
-le modifie.
-
-\paragraph{Bords nets.} Le gradient spectral est la dérivée exacte, aux pixels, de la courbe
-trigonométrique $f(x) = \frac1N\sum_m \ft f_m e^{i w_m x}$ qui passe par tous les pixels. Pour un bord net,
-cette courbe oscille entre les pixels (effet de Gibbs), et sa dérivée aussi : sur la
-figure~\ref{fig:gibbs}a, pour un saut de 150, on mesure 104 sur les deux pixels du bord, puis $-46$, $29$,
-$-21$\dots{} qui décroissent lentement. La différence finie, elle, vaut 150 sur un seul demi-pixel et 0
-ailleurs. Dès que le bord est un peu flou (figure~\ref{fig:gibbs}b), le spectre de l'image décroît avant
+Dès que le bord est un peu flou (figure~\ref{fig:gibbs}b), le spectre de l'image est presque nul près de
 la fréquence maximale $\pi$ et les oscillations disparaissent. Pour le mesurer, j'ai pris la plus grande
 valeur du gradient à plus de 4 pixels du bord, là où il devrait être nul :
 
@@ -173,35 +195,13 @@ Différence finie & 0 & 0 & 0 \\
 \end{tabular}
 \end{center}
 
-Ces oscillations ne gênent pas la reconstruction (le solveur les « défait » exactement), mais elles
-apparaissent dès que l'on modifie le gradient près d'un bord net, par exemple en le multipliant par
-$\alpha$.
+Ces oscillations ne gênent pas la reconstruction, car les valeurs alternées se compensent exactement.
+Elles deviennent visibles dès que l'on modifie le gradient près d'un bord net, par exemple en le
+multipliant par $\alpha$ d'un seul côté (section~\ref{sec:contraste}).
 
-\paragraph{Rotations.} Tourner une image de $45^\circ$ oblige à interpoler, et l'interpolation décide de
-la forme du bord. J'ai tourné le carré avec les trois interpolations usuelles, puis je l'ai remis droit
-(rotation de $-45^\circ$) pour mesurer ce que l'aller-retour perd :
+\subsection{Bruit : la dérivée l'amplifie}\label{sec:bruit}
 
-\begin{center}\small
-\begin{tabular}{@{}lccc@{}}
-\toprule
-Interpolation & Valeurs après rotation & Oscillations du gradient & Erreur de l'aller-retour \\
-\midrule
-Plus proche voisin & 50 à 200 & 18,7 & 1,43 \\
-Bilinéaire & 50 à 200 & 2,45 & 2,18 \\
-Bicubique & 35 à 216 & 1,02 & 0,62 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Au plus proche voisin, le bord devient un escalier de pixels nets et le gradient spectral oscille dans tout
-le carré (figure~\ref{fig:gibbs}c), autant que pour le bord net non tourné. L'interpolation bilinéaire
-adoucit le bord et divise les oscillations par 8, mais elle floute : l'aller-retour perd le plus.
-L'interpolation bicubique donne les plus petites oscillations (figure~\ref{fig:gibbs}d) et le meilleur
-aller-retour, mais elle dépasse elle-même autour du bord (valeurs de 35 à 216 pour une image entre 50 et
-200). C'est le même phénomène qu'avec Fourier, en plus faible. Pour l'édition de Poisson, une image
-tournée doit donc être interpolée au moins en bilinéaire avant de prendre son gradient.
-
-\paragraph{Bruit.} J'ai ajouté au carré un bruit gaussien d'écart-type $\sigma=4$. Pour un bruit blanc,
+J'ai ajouté au carré un bruit gaussien d'écart-type $\sigma=4$. Pour un bruit blanc,
 la dérivée spectrale a un écart-type $\sigma\pi/\sqrt3\approx 1{,}81\,\sigma = 7{,}2$ (toutes les
 fréquences jusqu'à $\pi$ sont multipliées par $w$) ; je mesure 7,04. La différence finie donne
 $\sigma\sqrt2 = 5{,}66$ ; je mesure 5,58. Le gradient spectral amplifie donc un peu plus le bruit, mais la
@@ -210,9 +210,13 @@ sous le seuil) multiplie ensuite le bruit du fond par $\alpha$ : il passe de 4,0
 $\times 2{,}50$. C'est l'argument de l'article pour choisir $\alpha = 2{,}5$, qui fait passer un bruit
 d'écart-type 4 à 10, limite jugée tolérable.
 
-\subsection{Rehaussement de contraste : pourquoi une zone sombre peut devenir noire}
+\subsection{Rehaussement de contraste : pourquoi une zone sombre peut devenir noire}\label{sec:contraste}
 
-\begin{figure}[h]
+La méthode du §4.1 multiplie par $\alpha$ le gradient des pixels plus sombres qu'un seuil $T$ (éq.~15).
+Sur la figure~\ref{fig:contraste_simple}, l'écart entre les deux carrés passe bien de 8 à 20.
+Mais le fond monte de 170 à 209 et le grand carré descend de 35 à $-27$ : à l'affichage, il devient noir.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{contraste_simple.png}
 \caption{Éq.~15 ($T=50$, $\alpha=2{,}5$) sur un fond clair (170) contenant un grand carré sombre (35) et
@@ -222,13 +226,10 @@ mais tout le carré sombre descend sous 0 et s'affiche en noir. (c) Après l'ét
 \label{fig:contraste_simple}
 \end{figure}
 
-La méthode du §4.1 multiplie par $\alpha$ le gradient des pixels plus sombres qu'un seuil $T$ (éq.~15).
-Sur la figure~\ref{fig:contraste_simple}, l'écart entre les deux carrés passe bien de 8 à 20.
-Mais le fond monte de 170 à 209 et le grand carré descend de 35 à $-27$ : à l'affichage, il devient noir.
-
-L'explication est le bord du carré. Le saut $\Delta = 135$ entre le carré et le fond est réparti, par le
-gradient spectral, sur les deux pixels qui l'entourent ; celui qui est du côté sombre est sous le seuil et
-son gradient est multiplié par $\alpha$. Le champ imposé demande donc un saut supplémentaire
+L'explication est le bord du carré. Le gradient spectral répartit le saut $\Delta = 135$ entre le carré et
+le fond de part et d'autre du bord, symétriquement (section~\ref{sec:gibbs}) : la moitié du saut,
+$\Delta/2$, est portée par les pixels du côté sombre. Ces pixels sont sous le seuil et leur gradient est
+multiplié par $\alpha$. Le champ imposé demande donc un saut supplémentaire
 $E = (\alpha-1)\Delta/2 \approx 101$, que la solution aux moindres carrés répartit entre les deux zones
 proportionnellement à leurs aires : si $p$ est la part de l'image sous le seuil ($p=0{,}39$ ici), le fond
 monte de $pE\approx 39$ et la zone sombre descend de $(1-p)E\approx 62$. L'article ne mentionne pas ce
@@ -277,7 +278,7 @@ Il a deux défauts.
   JPEG, devient une tache de couleur vive (figure~\ref{fig:taches}b).
 \end{itemize}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{article_taches.png}
 \caption{Berge du lac de la figure~5 de l'article, après l'éq.~15 et l'étirement. (b) Couleur obtenue en
@@ -286,15 +287,6 @@ multipliant les canaux par $v/f$ : taches dans les zones presque noires.}
 \end{figure}
 
 \subsection{Collage : ce qui se passe hors du masque}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{section5.png}
-\caption{Expérience de la figure 9 de l'article : une texture rapide (période 5 à 6 pixels) collée dans
-un disque de rayon 60 sur une texture lente. (d) Écart maximal $|u-f|$ hors du disque, en fonction de la
-distance au bord.}
-\label{fig:section5}
-\end{figure}
 
 La figure~\ref{fig:section5} reproduit l'expérience de la figure 9 de l'article. Il n'y a pas d'effet de
 Gibbs hors du masque : l'écart décroît régulièrement avec la distance, sans oscillation. En revanche,
@@ -305,9 +297,22 @@ le disque est remplacée par celle de $g$, et ce décalage à grande échelle es
 bord, puisqu'il n'y a pas de condition de Dirichlet sur $\partial\Omega$. C'est la limite que l'article
 signale lui-même au §6 : si l'extérieur ne doit pas changer du tout, l'ancienne méthode est préférable.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{section5.png}
+\caption{Expérience de la figure 9 de l'article : une texture rapide (période 5 à 6 pixels) collée dans
+un disque de rayon 60 sur une texture lente. (d) Écart maximal $|u-f|$ hors du disque, en fonction de la
+distance au bord.}
+\label{fig:section5}
+\end{figure}
+
 \subsection{Mélange de gradients (éq. 17)}
 
-\begin{figure}[h]
+L'éq.~17 garde, dans $\Omega$, le gradient de $f$ là où $|\nabla f| > |\nabla g|$ et celui de $g$
+ailleurs. À l'intérieur des lettres et dans le fond du texte, $\nabla g = 0$ et ce sont les rayures qui
+restent ; au bord des lettres, $\nabla g$ est grand et impose le contour (figure~\ref{fig:melange}d).
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{melange.png}
 \caption{Texte (a) collé sur des rayures (b). (c) Éq.~16 : le gradient du texte est imposé dans tout le
@@ -315,10 +320,6 @@ rectangle et les rayures disparaissent. (d) Éq.~17 : en chaque pixel, on garde 
 des deux images.}
 \label{fig:melange}
 \end{figure}
-
-L'éq.~17 garde, dans $\Omega$, le gradient de $f$ là où $|\nabla f| > |\nabla g|$ et celui de $g$
-ailleurs. À l'intérieur des lettres et dans le fond du texte, $\nabla g = 0$ et ce sont les rayures qui
-restent ; au bord des lettres, $\nabla g$ est grand et impose le contour (figure~\ref{fig:melange}d).
 
 \section{Comparaison avec les figures de l'article}\label{sec:article}
 
@@ -356,7 +357,7 @@ Avec l'étirement min-max, elle est éclaircie comme dans l'article, un peu plus
 pour la cascade. Sur la figure~3, le facteur de 0,53 rend le ciel plus terne que dans l'article : c'est le
 premier défaut décrit à la section~\ref{sec:etirement}.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{article_contraste.png}
 \caption{Figures 3 à 5 de l'article ($T=50$, $\alpha=2{,}5$). De gauche à droite : image d'origine, résultat
@@ -373,7 +374,7 @@ l'éq.~16 (18,3\,dB), ce qui confirme que l'article a bien utilisé le mélange.
 résultat modifie moins l'extérieur du masque que celui de l'article (39,9\,dB contre 23,8\,dB par rapport
 à l'image d'origine), sans doute parce que mon masque est plus serré que le sien.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{article_collage.png}
 \caption{En haut, résultats publiés dans l'article (figures 6 à 9, images tirées de \cite{morel}) ; en bas,
@@ -386,15 +387,6 @@ pixels), texte sur bois par mélange de gradients, texture sur texture.}
 
 \subsection{Rehaussement des zones sombres d'une radio du thorax}
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{thorax_contraste.png}
-\caption{Radio du thorax ($801\times700$). Le seuil est choisi automatiquement pour que la zone sombre
-couvre 25\,\% de l'image, comme le propose l'article : $T=101$, ce qui sélectionne les poumons. Le
-résultat (c, e) est ramené dans $[0,255]$ par l'étirement min-max.}
-\label{fig:thorax}
-\end{figure}
-
 Sur une radio du thorax, le seuil fixe $T=50$ de l'article ne sélectionne presque rien (3\,\% des
 pixels) : il a été choisi pour des photographies. Le seuil automatique (25\,\% de l'image) donne $T=101$
 et sélectionne les poumons (figure~\ref{fig:thorax}b). Après l'éq.~15, en 1,5\,s, la trame vasculaire des
@@ -406,18 +398,19 @@ contrastée que l'original, alors que le contraste local des poumons a augmenté
 viennent des bords nets (inscriptions, bord du film). En imagerie médicale, il serait plus naturel de
 laisser le radiologue choisir la fenêtre d'affichage, comme dans les logiciels de radiologie.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{thorax_contraste.png}
+\caption{Radio du thorax ($801\times700$). Le seuil est choisi automatiquement pour que la zone sombre
+couvre 25\,\% de l'image, comme le propose l'article : $T=101$, ce qui sélectionne les poumons. Le
+résultat (c, e) est ramené dans $[0,255]$ par l'étirement min-max.}
+\label{fig:thorax}
+\end{figure}
+
 Sur d'autres images (fond d'œil, radio de la main), la zone sous le seuil est surtout le fond noir
 autour de l'organe, et la méthode apporte peu.
 
 \subsection{Insérer une lésion}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{nodules.png}
-\caption{Insertion d'une zone de poumon présentant des nodules (a, radio d'une sarcoïdose) dans le poumon
-droit d'une radio normale. (b) Copie des pixels. (c) Éq.~16. (d) Éq.~17.}
-\label{fig:nodules}
-\end{figure}
 
 Créer des images pathologiques réalistes à partir d'images saines est utile, par exemple pour augmenter
 les données d'apprentissage d'un réseau de détection. La figure~\ref{fig:nodules} colle dans un poumon
@@ -426,15 +419,15 @@ avec l'éq.~16, les niveaux de gris se raccordent et la texture nodulaire semble
 mais les côtes de l'image de destination disparaissent dans le disque. Avec l'éq.~17, les côtes, dont le
 gradient est plus fort que celui de la texture collée, sont conservées.
 
-\subsection{Effacer un marqueur}
-
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.85\linewidth]{effacement.png}
-\caption{Effacement des marqueurs de latéralité, en collant dans chaque rectangle le gradient de la zone
-située 70 pixels à droite (éq.~16 avec la même image comme source, figure 7 de l'article).}
-\label{fig:effacement}
+\includegraphics[width=\linewidth]{nodules.png}
+\caption{Insertion d'une zone de poumon présentant des nodules (a, radio d'une sarcoïdose) dans le poumon
+droit d'une radio normale. (b) Copie des pixels. (c) Éq.~16. (d) Éq.~17.}
+\label{fig:nodules}
 \end{figure}
+
+\subsection{Effacer un marqueur}
 
 Les radios portent souvent des inscriptions (marqueurs, annotations). Comme dans la figure 7 de
 l'article, on remplace le gradient d'un rectangle autour du marqueur par celui d'une zone voisine de la
@@ -442,85 +435,27 @@ même image (figure~\ref{fig:effacement}). Le résultat est sans couture, et le 
 presque pas modifié (moins d'un niveau de gris sous la ligne 100), car la zone source et la zone
 effacée ont le même contenu à grande échelle.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{effacement.png}
+\caption{Effacement des marqueurs de latéralité, en collant dans chaque rectangle le gradient de la zone
+située 70 pixels à droite (éq.~16 avec la même image comme source, figure 7 de l'article).}
+\label{fig:effacement}
+\end{figure}
+
 \subsection{Volumes 3D}
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.8\linewidth]{fantome_3d.png}
-\caption{Fantôme de tête $96\times96\times48$ : air, crâne, cerveau, deux ventricules sombres et une
-petite lésion (+8) dans le ventricule gauche, flouté ($\sigma=1$) et bruité ($\sigma=2$). Coupes passant
-par la lésion. Les résultats de l'éq.~15 sont ramenés dans $[0,255]$ par l'étirement min-max. Coupe par
-coupe, des stries horizontales apparaissent sur les coupes coronale et sagittale.}
-\label{fig:fantome}
-\end{figure}
+Le solveur 3D reconstruit un volume à partir de son gradient avec la même précision qu'en 2D
+($1{,}4\cdot10^{-13}$). J'ai appliqué l'éq.~15 à une IRM cérébrale 3D, réduite d'un facteur 2 pour tenir
+en mémoire, de deux façons : sur le volume entier, et coupe axiale par coupe axiale avec le solveur 2D.
+Coupe par coupe, rien ne relie une coupe à la suivante et chacune reçoit son propre décalage : des stries
+horizontales apparaissent sur les vues sagittale et coronale, alors qu'en 3D il n'y en a pas. Si l'on
+traite un volume, il faut donc le traiter en 3D.
 
-Le solveur 3D reconstruit le fantôme de la figure~\ref{fig:fantome} avec une erreur de
-$1{,}4\cdot10^{-13}$, en environ une seconde. J'ai comparé l'éq.~15 appliquée au volume entier et
-appliquée coupe axiale par coupe axiale avec le solveur 2D :
-
-\begin{center}\small
-\begin{tabular}{@{}lccc@{}}
-\toprule
- & Lésion $-$ ventricule & Bruit dans le ventricule & Écart à l'éq.~15 entre coupes\\
-\midrule
-Original & 4,0 & 2,1 & 3,61\\
-Éq.~15 en 3D & 10,7 & 5,5 & 1,47\\
-Éq.~15 coupe par coupe & 10,8 & 5,6 & 2,65\\
-\bottomrule
-\end{tabular}
-\end{center}
-
-La lésion ressort environ $2{,}5$ fois plus, mais le bruit aussi : le rapport contraste sur bruit ne
-change pas. La méthode rend la lésion plus visible à l'œil, elle n'ajoute pas d'information. La
-différence entre 3D et coupe par coupe est dans la direction $z$ : coupe par coupe, rien ne relie une
-coupe à la suivante, et l'écart au gradient voulu entre deux coupes voisines est presque deux fois plus
-grand, ce qui se voit sous forme de stries.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{scanner_3d.png}
-\caption{Scanner de tête ($256\times256\times10$, fourni par scikit-image), niveaux ramenés à $[0,255]$.
-Éq.~15 en 3D avec $T=60$, juste au-dessus du niveau du cerveau, puis étirement min-max.}
-\label{fig:scanner}
-\end{figure}
-
-Sur un vrai scanner de tête (figure~\ref{fig:scanner}), le cerveau est très sombre par rapport à l'os
-(niveau médian 50). Avec $T=60$, l'éq.~15 en 3D le remonte à 94 et fait apparaître ses variations de
-densité, tout en gardant l'os intact. Ici le cerveau, entouré d'os clair, ne passe pas sous 0 : c'est
-l'air autour de la tête qui y passe. Après l'étirement (facteur 0,53), le cerveau vaut 83, toujours bien
-plus clair qu'au départ. Le calcul prend 6,2\,s pour un volume prolongé de $512\times512\times20$
-voxels.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{irm_3d.png}
-\caption{IRM pondérée T1 d'un sujet sain (OpenNeuro ds000001), $160\times192\times192$ voxels de
-$1\times1{,}33\times1{,}33$\,mm. Le bloc noir devant le visage vient de l'anonymisation (le visage est
-effacé). (d) Les trois coupes placées dans l'espace.}
-\label{fig:irm}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.8\linewidth]{irm_contraste_3d.png}
-\caption{Éq.~15 ($T=60$, $\alpha=2{,}5$) sur l'IRM réduite d'un facteur 2 ($80\times96\times96$), en
-3D et coupe axiale par coupe axiale, puis étirement min-max (facteur 0,31 en 3D et 0,30 coupe par coupe).
-Coupe par coupe, des stries horizontales apparaissent sur les coupes sagittale et coronale.}
-\label{fig:irm_contraste}
-\end{figure}
-
-Enfin, j'ai appliqué la méthode à une vraie IRM cérébrale 3D (figure~\ref{fig:irm}). Le volume prolongé
-complet ferait $320\times384\times384\approx 47$ millions de voxels, soit 755\,Mo par tableau de
-coefficients complexes, et le calcul en garde plusieurs en mémoire ; j'ai donc réduit le volume d'un
-facteur 2 (moyenne de $2\times2\times2$ voxels) avant d'appliquer l'éq.~15. Avec $T=60$, la zone sombre
-contient l'air, le liquide cérébrospinal et l'os cortical, soit 75\,\% du volume réduit ; le calcul prend
-6,2\,s. Comme sur le fantôme, la différence entre 3D et coupe par coupe se voit dans la direction $z$
-(figure~\ref{fig:irm_contraste}) : coupe par coupe, chaque coupe axiale reçoit son propre décalage et
-des stries horizontales apparaissent sur les coupes sagittale et coronale. L'écart moyen au gradient
-voulu entre deux coupes voisines vaut 9,6 coupe par coupe, contre 5,4 en 3D, où aucune strie n'est
-visible. Sur ce volume, l'étirement min-max montre bien son premier défaut : $u$ va de $-153$ à $680$, à
-cause de quelques voxels très clairs (graisse, vaisseaux) dont le gradient a été amplifié, et le facteur
-de 0,30 rend l'image grise. Un étirement entre percentiles serait ici préférable.
+Le résultat n'est en revanche pas meilleur que l'original. Sur une IRM T1, la zone sous le seuil est
+surtout l'air et le liquide cérébrospinal, qu'il n'y a pas d'intérêt à rehausser, et le tissu cérébral,
+au-dessus du seuil, n'est pas modifié. De plus, l'étirement min-max a ici un facteur de 0,30 et rend
+l'image entière grise. Le rehaussement de contraste de l'article n'est donc pas adapté à ce type d'image.
 
 \section{Discussion}
 
@@ -528,8 +463,8 @@ La méthode de l'article est exacte, simple et rapide : trois FFT, quelle que so
 modifiée, ce qui permet de la définir par un seuil. Elle se généralise sans difficulté aux volumes.
 Mes essais font aussi apparaître ses limites :
 \begin{itemize}
-  \item le gradient spectral oscille autour des bords nets, y compris les escaliers créés par une
-  rotation au plus proche voisin ; ces oscillations sont invisibles tant que le champ n'est pas modifié,
+  \item le gradient spectral oscille autour des bords nets ; ces oscillations sont invisibles tant que le
+  champ n'est pas modifié,
   mais apparaissent dès qu'on le modifie près d'un bord ;
   \item résoudre sur toute l'image modifie un peu l'extérieur de la zone éditée, d'autant plus que les
   contenus basse fréquence de la source et de la destination diffèrent ;
@@ -548,23 +483,17 @@ et une reconstruction plus précise (310 à 320\,dB contre 69 à 96\,dB).
 
 J'ai réimplémenté la méthode de Morel, Petro et Sbert et reproduit toutes ses expériences, sur mes images
 et sur celles de l'article. La reconstruction est exacte à la précision de la machine. J'ai expliqué les
-phénomènes observés (oscillations du gradient spectral, effet de l'interpolation lors d'une rotation,
-amplification du bruit, zones sombres qui deviennent noires, perturbation hors du masque), proposé un
+phénomènes observés (oscillations du gradient spectral, amplification du bruit, zones sombres qui deviennent noires, perturbation hors du masque), proposé un
 étirement min-max qui évite les zones noires, en précisant ses défauts, et appliqué la
 méthode à des images médicales : rehaussement d'une radio du thorax, insertion d'une lésion, effacement de
-marqueurs, puis rehaussement de volumes 3D (scanner et IRM), où le traitement en 3D évite les stries
-d'un traitement coupe par coupe. Une suite naturelle serait de rendre l'étirement robuste aux pixels
-extrêmes (percentiles), de corriger à la source le défaut des zones sombres, par exemple en travaillant sur le logarithme de l'image comme Pérez et al.~\cite{perez} et Fattal
-et al.~\cite{fattal}, et de traiter les volumes IRM à pleine résolution, en réduisant la mémoire utilisée (transformée de
-Fourier réelle, calcul en simple précision).
+marqueurs, puis extension aux volumes 3D, où le traitement en 3D évite les stries d'un
+traitement coupe par coupe, même si le rehaussement n'améliore pas l'IRM. Une suite naturelle serait de
+rendre l'étirement robuste aux pixels extrêmes (percentiles) et de corriger à la source le défaut des
+zones sombres, par exemple en travaillant sur le logarithme de l'image.
 
 \begin{thebibliography}{9}
 \bibitem{morel} J.-M. Morel, A.~B. Petro, C. Sbert, \emph{Fourier implementation of Poisson image
 editing}, Pattern Recognition Letters 33 (2012) 342--348.
-\bibitem{perez} P. Pérez, M. Gangnet, A. Blake, \emph{Poisson image editing}, ACM Transactions on
-Graphics 22 (2003) 313--318.
-\bibitem{fattal} R. Fattal, D. Lischinski, M. Werman, \emph{Gradient domain high dynamic range
-compression}, ACM Transactions on Graphics 21 (2002) 249--256.
 \end{thebibliography}
 
 \appendix
@@ -574,31 +503,71 @@ compression}, ACM Transactions on Graphics 21 (2002) 249--256.
   \item \texttt{methodes/} : \texttt{solver.py} (éq.~9 à 13), \texttt{solver3d.py} (la même chose en 3D),
   \texttt{contraste.py} (éq.~15, en 2D et en 3D, étirement min-max, passage à la couleur),
   \texttt{collage.py} (éq.~16 et 17), \texttt{utils.py}.
-  \item \texttt{tests/} : un fichier par expérience (reconstruction, contraste, images simples : bords,
-  rotations et bruit, copie dans la même image ou depuis une autre image, mélange, section 5, solveur 3D,
+  \item \texttt{tests/} : un fichier par expérience (reconstruction, contraste, images simples : bords
+  et bruit, copie dans la même image ou depuis une autre image, mélange, section 5, solveur 3D,
   images de l'article).
   \item \texttt{docs/rapport/generer\_figures.py} produit toutes les figures et tous les chiffres de ce
   rapport.
 \end{itemize}
+Le code complet est reproduit à la fin de ce document (annexe~\ref{sec:code}). La répartition du travail
+entre l'agent conversationnel et moi est détaillée à l'annexe~\ref{sec:agents}.
 
 \section{Sources des images}
 
 Images de Wikimedia Commons : radio du thorax normale et radio de la main (M.~Häggström, CC0) ; radio d'une
 sarcoïdose (M.~Häggström, CC0) ; IRM cérébrale « MRI Brain T1 Axial (9) » (511KeV, CC BY-SA 4.0) ; fond
-d'œil (domaine public). Le scanner de tête est le volume \texttt{skimage.data.brain()} de scikit-image.
-L'IRM 3D est le volume \texttt{sub-01\_T1w} du jeu de données OpenNeuro ds000001 (Schonberg et al.,
+d'œil (domaine public).L'IRM 3D est le volume \texttt{sub-01\_T1w} du jeu de données OpenNeuro ds000001 (Schonberg et al.,
 2012, CC0), lu avec nibabel. Les images de la section~\ref{sec:article} sont extraites des figures 3 à 9
 de l'article \cite{morel} (© Elsevier), uniquement pour la comparaison ; elles ne sont pas redistribuées
 avec le code.
 
-\section{Utilisation des agents conversationnels}
+\section{Utilisation des agents conversationnels}\label{sec:agents}
 
-J'ai utilisé Claude (Anthropic), dans Claude Code, tout au long du projet. Je m'en suis servi surtout pour
-comprendre l'article : je lui ai fait expliquer les équations, la transformée de Fourier discrète, la
-condition de Neumann et les phénomènes observés, jusqu'à ce que ce soit clair pour moi. Pour le code, il
-m'a proposé les fonctions à partir des formules de l'article ; je les ai relues, comprises et testées. Les
-fichiers de test, les figures et une première version de ce rapport ont été écrits avec son aide. L'agent
-s'est parfois trompé (il a par exemple présenté comme venant de l'article des points qui n'y sont pas) ;
-j'ai donc vérifié ses affirmations dans l'article et par des tests numériques.
+J'ai utilisé Claude (Anthropic), dans Claude Code, tout au long du projet, de trois façons.
+
+\paragraph{Comprendre l'article.} Je m'en suis d'abord servi pour bien comprendre le papier de recherche :
+je lui ai fait expliquer les équations, la transformée de Fourier discrète, le prolongement par symétrie
+et la condition de Neumann, puis les phénomènes que j'observais (oscillations du gradient spectral,
+zones sombres qui deviennent noires), jusqu'à ce que ce soit clair pour moi.
+
+\paragraph{Imaginer et coder les fonctions principales.} Il m'a aidé à imaginer les fonctions à partir
+des formules de l'article (le prolongement miroir, le gradient de l'éq.~13, le solveur de l'éq.~12, le
+contraste de l'éq.~15, le collage et le mélange des éq.~16 et 17), puis à les coder dans le détail.
+J'ai compris et retravaillé moi-même ces fonctions principales, rassemblées dans le dossier
+\texttt{methodes/} : je sais expliquer chaque ligne, je les ai testées et modifiées. L'étirement min-max
+de la section~\ref{sec:etirement} est une idée à moi, que j'ai ensuite implémentée avec son aide.
+
+\paragraph{Les tests et les figures.} Je m'en suis encore plus servi pour les fichiers du dossier
+\texttt{tests/} et pour le script qui produit les figures du rapport : je définissais l'expérience à faire
+et ce que je voulais mesurer, et l'agent écrivait une grande partie du code correspondant, que je lançais
+et dont j'analysais les résultats. Il m'a aussi aidé à rédiger et à mettre en forme ce rapport.
+
+L'agent s'est parfois trompé (il a par exemple présenté comme venant de l'article des points qui n'y sont
+pas) ; j'ai donc vérifié ses affirmations dans l'article et par des tests numériques.
+
+\clearpage
+\section{Code}\label{sec:code}
+
+\subsection{Méthodes (dossier \texttt{methodes/})}
+\lstinputlisting[title=\texttt{methodes/solver.py}]{../../methodes/solver.py}
+\lstinputlisting[title=\texttt{methodes/solver3d.py}]{../../methodes/solver3d.py}
+\lstinputlisting[title=\texttt{methodes/utils.py}]{../../methodes/utils.py}
+\lstinputlisting[title=\texttt{methodes/contraste.py}]{../../methodes/contraste.py}
+\lstinputlisting[title=\texttt{methodes/collage.py}]{../../methodes/collage.py}
+
+\subsection{Tests (dossier \texttt{tests/})}
+\lstinputlisting[title=\texttt{tests/test\_reconstruction.py}]{../../tests/test_reconstruction.py}
+\lstinputlisting[title=\texttt{tests/test\_validation\_section5.py}]{../../tests/test_validation_section5.py}
+\lstinputlisting[title=\texttt{tests/test\_images\_simples.py}]{../../tests/test_images_simples.py}
+\lstinputlisting[title=\texttt{tests/test\_contraste\_exemples.py}]{../../tests/test_contraste_exemples.py}
+\lstinputlisting[title=\texttt{tests/test\_contraste\_seuils.py}]{../../tests/test_contraste_seuils.py}
+\lstinputlisting[title=\texttt{tests/test\_copie\_meme\_image.py}]{../../tests/test_copie_meme_image.py}
+\lstinputlisting[title=\texttt{tests/test\_copie\_autre\_image.py}]{../../tests/test_copie_autre_image.py}
+\lstinputlisting[title=\texttt{tests/test\_melange\_gradients.py}]{../../tests/test_melange_gradients.py}
+\lstinputlisting[title=\texttt{tests/test\_solveur\_3d.py}]{../../tests/test_solveur_3d.py}
+\lstinputlisting[title=\texttt{tests/test\_images\_article.py}]{../../tests/test_images_article.py}
+
+\subsection{Figures du rapport}
+\lstinputlisting[title=\texttt{docs/rapport/generer\_figures.py}]{generer_figures.py}
 
 \end{document}

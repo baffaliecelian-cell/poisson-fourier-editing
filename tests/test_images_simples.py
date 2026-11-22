@@ -4,7 +4,7 @@ sys.path.insert(0, RACINE)
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter, rotate
+from scipy.ndimage import gaussian_filter
 from methodes.utils import grad
 from methodes.solver import compute_f_hat, gradient_hat, solve_poisson
 from methodes.contraste import contrast_enhance
@@ -64,32 +64,9 @@ def test_net_flou():
     plt.show()
 
 
-# test 2 : rotation de 45° -> il faut interpoler, et le choix de l'interpolation change le bord
-def test_rotation():
-    print("=== test 2 : rotation de 45 degrés ===")
-    f = carre()
-    noms = {0: "plus proche voisin", 1: "bilinéaire", 3: "bicubique"}
-    fig, ax = plt.subplots(3, 3, figsize=(13, 11))
-    for i, order in enumerate([0, 1, 3]):
-        r = rotate(f, 45, reshape=False, order=order, cval=50)
-        retour = rotate(r, -45, reshape=False, order=order, cval=50)
-        V1, V2 = grad_spectral(r)
-        err = np.abs(retour - f)[30:98, 30:98].mean()
-        print(f"{noms[order]:18s} valeurs entre {r.min():5.1f} et {r.max():5.1f}"
-              f" | oscillations du gradient : {oscillations(np.hypot(V1, V2), r):5.2f}"
-              f" | aller-retour 45/-45 : erreur moyenne = {err:.2f}")
-        ax[i, 0].imshow(r[20:60, 50:90], cmap="gray", interpolation="none"); ax[i, 0].set_title(f"{noms[order]} (zoom)")
-        ax[i, 1].imshow(np.hypot(V1, V2), cmap="gray", vmax=40); ax[i, 1].set_title("|grad| spectral")
-        ax[i, 2].imshow(np.abs(retour - f), cmap="hot", vmax=50); ax[i, 2].set_title("|aller-retour - original|")
-        for a in ax[i]:
-            a.axis("off")
-    plt.tight_layout()
-    plt.show()
-
-
-# test 3 : bruit -> le solveur reste exact, mais la dérivée et alpha amplifient le bruit
+# test 2 : bruit -> le solveur reste exact, mais la dérivée et alpha amplifient le bruit
 def test_bruit():
-    print("=== test 3 : bruit ===")
+    print("=== test 2 : bruit ===")
     sigma = 4
     f = carre() + rng.normal(0, sigma, (N, N))
     V1, V2 = grad_spectral(f)
@@ -113,9 +90,9 @@ def test_bruit():
     plt.show()
 
 
-# test 4 : moitié sombre rayée / moitié claire -> pourquoi le contraste assombrit le sombre
+# test 3 : moitié sombre rayée / moitié claire -> pourquoi le contraste assombrit le sombre
 def test_bord_contraste():
-    print("=== test 4 : contraste sur moitié sombre / moitié claire ===")
+    print("=== test 3 : contraste sur moitié sombre / moitié claire ===")
     l = np.arange(N)
     rayures = 5 * np.sin(2 * np.pi * l / 8) * (l < N // 2 - 8)
     marche_nette = np.where(l < N // 2, 0, 120.0)
@@ -137,6 +114,5 @@ def test_bord_contraste():
 
 
 test_net_flou()
-test_rotation()
 test_bruit()
 test_bord_contraste()

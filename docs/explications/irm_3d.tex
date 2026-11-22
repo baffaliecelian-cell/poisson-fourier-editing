@@ -1,0 +1,207 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{fontspec}
+\usepackage[french]{babel}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[font=small,labelfont=bf]{caption}
+
+\graphicspath{{../rapport/figures/}}
+\newcommand{\ft}[1]{\widehat{#1}}
+\setlength{\parskip}{0.4em}
+
+\title{L'expérience sur l'IRM 3D\\[0.2em]\large Ce qui a été fait, pour pouvoir l'expliquer à l'oral}
+\author{Célian Baffalie}
+\date{}
+
+\begin{document}
+\maketitle
+
+Dans le rapport, cette partie est réduite à une figure et un paragraphe. Ce document détaille tout ce qui a
+été fait, dans l'ordre du code (section 10 de \texttt{docs/rapport/generer\_figures.py}), et les questions
+qu'on peut me poser.
+
+\section{Le but}
+
+Montrer que la méthode de l'article marche aussi en 3D, sur une vraie image médicale, et comparer deux
+façons de traiter un volume :
+\begin{itemize}
+  \item \textbf{en 3D} : on résout une seule équation de Poisson sur tout le volume, avec une FFT 3D
+  (fonction \texttt{contrast\_enhance\_3d}) ;
+  \item \textbf{coupe par coupe} : on applique la version 2D (\texttt{contrast\_enhance}) à chaque coupe
+  axiale séparément, comme si les coupes étaient des images indépendantes.
+\end{itemize}
+Le fantôme (volume synthétique) a servi à vérifier le solveur 3D et à mesurer les effets ; l'IRM sert à
+voir si les conclusions tiennent sur une vraie image.
+
+\section{Les données}
+
+\begin{itemize}
+  \item \textbf{Source} : jeu de données public OpenNeuro \texttt{ds000001}, sujet \texttt{sub-01},
+  image \texttt{T1w} (Schonberg et al., 2012, licence CC0). C'est une IRM anatomique d'un sujet sain.
+  \item \textbf{Format} : NIfTI (\texttt{.nii.gz}), le format standard des IRM en recherche. Je le lis
+  avec la bibliothèque \texttt{nibabel} : \texttt{nib.load(...)} donne le volume et un en-tête.
+  \item \textbf{Taille} : $160\times192\times192$ voxels. L'en-tête donne la taille d'un voxel :
+  $1\times1{,}33\times1{,}33$\,mm (fonction \texttt{get\_zooms}). Les voxels ne sont donc pas cubiques.
+  \item \textbf{Axes} : le premier axe va de gauche à droite (R), le deuxième de l'arrière vers l'avant
+  (A), le troisième du bas vers le haut (S).
+  \item \textbf{Normalisation} : les valeurs d'une IRM n'ont pas d'unité fixe. Je les ramène à peu près
+  dans $[0,255]$ en divisant par le percentile 99,5 et en multipliant par 255, pour que le seuil $T$ ait
+  le même sens que sur les photos. Le percentile plutôt que le maximum évite qu'un seul voxel très clair
+  fixe l'échelle.
+\end{itemize}
+
+\paragraph{Ce qu'on voit sur une IRM T1.} La pondération T1 donne : substance blanche claire, substance
+grise intermédiaire, liquide cérébrospinal (ventricules, sillons) sombre, air noir, graisse (sous la peau,
+moelle osseuse) très claire, os cortical sombre. Le bloc noir devant le visage vient de l'anonymisation :
+le visage a été effacé pour qu'on ne puisse pas reconnaître le sujet (\emph{defacing}).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{irm_3d.png}
+\caption{L'IRM d'origine (figure retirée du rapport). (a, b, c) Les trois coupes orthogonales.
+(d) Les trois coupes placées dans l'espace.}
+\end{figure}
+
+\section{Afficher un volume : les trois coupes}
+
+Un volume ne s'affiche pas directement ; on montre des coupes planes :
+\begin{itemize}
+  \item \textbf{sagittale} : on fixe le premier indice, \texttt{v[i]} (vue de profil) ;
+  \item \textbf{coronale} : on fixe le deuxième, \texttt{v[:, j]} (vue de face) ;
+  \item \textbf{axiale} : on fixe le troisième, \texttt{v[:, :, k]} (vue de dessus).
+\end{itemize}
+\texttt{np.rot90} tourne chaque coupe pour avoir le haut de la tête en haut. Comme les voxels ne sont pas
+cubiques, j'affiche chaque coupe avec un rapport d'aspect égal au rapport des tailles de voxels
+(\texttt{aspect} dans \texttt{imshow}), sinon la tête serait déformée. La vue 3D (d) place les trois
+coupes dans l'espace avec \texttt{plot\_surface} de Matplotlib : chaque coupe est une surface plane
+coloriée avec ses niveaux de gris.
+
+\section{Pourquoi réduire le volume d'un facteur 2}
+
+Le solveur travaille sur le volume prolongé par miroir, deux fois plus grand dans chaque direction :
+$320\times384\times384\approx 47$ millions de voxels. Un tableau de nombres complexes (16 octets par
+valeur) fait alors 755\,Mo. Or \texttt{contrast\_enhance\_3d} garde en mémoire plusieurs tableaux de cette
+taille en même temps : $\ft f$, les trois composantes du gradient en Fourier, les trois composantes en
+espace, leurs trois FFT, puis $\ft u$. Cela fait de l'ordre de 6\,Go, trop pour mon ordinateur.
+
+J'ai donc réduit le volume en faisant la moyenne de chaque bloc de $2\times2\times2$ voxels :
+\texttt{v.reshape(80, 2, 96, 2, 96, 2).mean(axis=(1, 3, 5))}. Le volume passe à $80\times96\times96$,
+le volume prolongé à 5,9 millions de voxels (94\,Mo par tableau), et le calcul prend 5 à 6\,s.
+
+\section{L'éq.~15 en 3D}
+
+C'est exactement la méthode 2D, avec un axe de plus :
+\begin{enumerate}
+  \item prolongement miroir sur les trois axes, FFT 3D ;
+  \item gradient en Fourier : $\ft{V_1} = i w_m \ft f$, $\ft{V_2} = i w_n \ft f$, $\ft{V_3} = i w_p \ft f$ ;
+  \item retour en espace, multiplication par $\alpha$ des trois composantes dans la zone
+  $X=\{f<T\}$ ;
+  \item retour en Fourier et résolution :
+  \[
+    \ft u_{mnp} = \frac{-i\,(w_m \ft{V_1} + w_n \ft{V_2} + w_p \ft{V_3})}{w_m^2 + w_n^2 + w_p^2},
+    \qquad \ft u_{000} = \ft f_{000} ;
+  \]
+  \item FFT inverse et on garde le huitième $H\times W\times D$ de départ.
+\end{enumerate}
+J'ai pris $T=60$ et $\alpha=2{,}5$. Avec $T=60$, la zone sombre contient l'air, le liquide cérébrospinal
+et l'os cortical : 75\,\% du volume réduit, surtout de l'air autour de la tête.
+
+\section{3D contre coupe par coupe}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.62\linewidth]{irm_contraste_3d.png}
+\caption{La figure gardée dans le rapport. Ligne 1 : original réduit. Ligne 2 : éq.~15 en 3D. Ligne 3 :
+éq.~15 coupe axiale par coupe axiale. Les deux résultats sont étirés en min-max.}
+\end{figure}
+
+\paragraph{Ce qu'on voit.} Coupe par coupe, des stries horizontales apparaissent sur les coupes sagittale
+et coronale. Elles n'existent pas en 3D, ni sur les coupes axiales.
+
+\paragraph{Pourquoi.} Coupe par coupe, chaque coupe axiale est traitée seule :
+\begin{itemize}
+  \item rien ne relie une coupe à la suivante : le solveur 2D ne connaît pas la direction $z$ ;
+  \item chaque coupe reçoit sa propre constante : $\ft u_{00}=\ft f_{00}$ impose que \emph{chaque coupe}
+  garde sa moyenne, et le décalage dû au contraste (le saut supplémentaire $E$ du rapport) dépend de la
+  proportion de zone sombre dans la coupe, qui varie d'une coupe à l'autre.
+\end{itemize}
+Deux coupes voisines reçoivent donc des décalages différents. Sur une coupe axiale on ne le voit pas (tout
+le plan est décalé pareil), mais sur une coupe sagittale ou coronale, qui traverse toutes les coupes
+axiales, chaque ligne horizontale correspond à une coupe axiale, d'où les stries. En 3D, la direction $z$
+est traitée comme les deux autres et il n'y a qu'une constante pour tout le volume.
+
+\paragraph{La mesure.} Pour chiffrer ce que l'on voit, je compare la dérivée selon $z$ du résultat avec
+celle que demande l'éq.~15 :
+\[
+  V_z = \alpha^{[f<T]}\,\big(f[\cdot,\cdot,k+1]-f[\cdot,\cdot,k]\big),
+  \qquad
+  \text{écart} = \operatorname{moyenne}\,\big|\,(x[\cdot,\cdot,k+1]-x[\cdot,\cdot,k]) - V_z\,\big|,
+\]
+pour $x$ = l'original, le résultat 3D et le résultat coupe par coupe :
+
+\begin{center}
+\begin{tabular}{@{}lc@{}}
+\toprule
+ & Écart à l'éq.~15 selon $z$ \\
+\midrule
+Original (rien n'est fait) & 5,25 \\
+Éq.~15 en 3D & 5,38 \\
+Éq.~15 coupe par coupe & 9,60 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Comment le lire.} Coupe par coupe, l'écart est presque deux fois plus grand qu'en 3D : les
+coupes voisines ne sont plus cohérentes. En 3D, l'écart reste du même ordre que pour l'original : le
+résultat 3D ne réalise pas exactement le champ demandé, parce que ce champ ($\alpha\nabla f$ dans $X$,
+$\nabla f$ ailleurs) n'est pas le gradient d'une image. La méthode trouve l'image dont le gradient est le
+plus proche au sens des moindres carrés, en répartissant l'erreur dans les trois directions. Cette mesure
+utilise des différences finies alors que le solveur utilise le gradient spectral : c'est un indicateur
+pour comparer les deux méthodes entre elles, pas une erreur exacte.
+
+\section{L'étirement}
+
+Le résultat 3D va de $-153$ à $680$, celui coupe par coupe de $-149$ à $692$. L'étirement min-max
+multiplie donc les contrastes par $255/833\approx0{,}31$ (et 0,30) : l'image devient grise. C'est le
+premier défaut de l'étirement décrit dans le rapport : quelques voxels extrêmes, souvent près de bords
+nets (graisse très claire à côté de l'air, dont le gradient est amplifié), fixent l'échelle de tout le
+volume. Un étirement entre percentiles (par exemple 1\,\% et 99\,\%) serait meilleur ici.
+
+\section{Questions qu'on peut me poser}
+
+\paragraph{Pourquoi $T=60$ et pas 50 ?} 50 est le seuil de l'article pour des photos. Sur l'IRM
+normalisée, l'histogramme du centre du cerveau a deux pics : la substance grise vers 120 et la substance
+blanche vers 200. Le seuil 60 est nettement en dessous des deux : la zone rehaussée est le liquide
+cérébrospinal, l'os cortical et l'air, et le tissu cérébral n'est pas modifié directement. Le choix reste
+empirique ; je n'ai pas cherché de seuil optimal.
+
+\paragraph{Est-ce utile cliniquement ?} Pas directement. La méthode ne crée pas d'information : sur le
+fantôme, la lésion ressort $2{,}5$ fois plus, mais le bruit aussi, donc le rapport contraste sur bruit ne
+change pas. Elle rend des détails sombres plus visibles à l'œil, comme le réglage de fenêtre que font les
+radiologues, mais de façon locale (seulement dans la zone sombre) et sans bord visible.
+
+\paragraph{Le solveur tient-il compte des voxels non cubiques ?} Non, et c'est une limite. Le gradient est
+calculé par voxel, pas par millimètre : le solveur traite les trois axes de la même façon, alors qu'après
+réduction les voxels font $2\times2{,}67\times2{,}67$\,mm. Pour en tenir compte, il faudrait diviser
+chaque pulsation par la taille du voxel dans cette direction ($w_m/h_1$, $w_n/h_2$, $w_p/h_3$). Cela
+change un peu le poids de chaque direction dans les moindres carrés, mais pas les conclusions.
+
+\paragraph{Pourquoi ne pas traiter le volume complet ?} Pour la mémoire. On pourrait : utiliser une FFT
+réelle (\texttt{rfftn}, deux fois moins de mémoire), calculer en simple précision (encore deux fois
+moins), ou libérer les tableaux au fur et à mesure. On pourrait aussi remplacer le prolongement miroir et
+la FFT par une transformée en cosinus (DCT), qui donne la même condition de Neumann sans doubler la taille.
+
+\paragraph{Pourquoi les stries sont-elles horizontales ?} Parce que j'ai traité les coupes axiales
+(perpendiculaires à l'axe vertical $S$). Chaque coupe axiale devient une ligne horizontale sur les vues
+sagittale et coronale.
+
+\paragraph{Pourquoi pas de stries sur la coupe axiale ?} Une coupe axiale est une seule coupe traitée en
+2D : elle est cohérente avec elle-même. Le défaut est entre les coupes, donc il ne se voit que sur les
+vues qui en traversent plusieurs.
+
+\paragraph{D'où vient l'image ?} De OpenNeuro, une base publique de données d'imagerie cérébrale, sous
+licence CC0 (domaine public). Elle est anonymisée (visage effacé).
+
+\end{document}

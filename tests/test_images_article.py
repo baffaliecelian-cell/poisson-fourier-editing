@@ -71,7 +71,7 @@ for k, (mse_a, psnr_a, md_a) in article.items():
           f"{np.abs(u - f).max():11.1e}{md_a:9.3f}")
 
 
-# ---------- figures 3 à 5 : rehaussement de contraste, T = 50, α = 2,5 ----------
+# ---------- figures 3 à 5 : rehaussement de contraste, T = 50, alpha = 2,5 ----------
 print("\nFigures 3 à 5 : rehaussement de contraste (T = 50, alpha = 2.5)")
 for k in ["fig3", "fig4", "fig5"]:
     img = lit(k + "_1.png")

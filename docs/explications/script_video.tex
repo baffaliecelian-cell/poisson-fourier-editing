@@ -1,0 +1,164 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{fontspec}
+\usepackage[french]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+\newcommand{\partie}[3]{\bigskip\noindent\colorbox{gray!15}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
+  \textbf{#1}\hfill\textbf{#2}\\ \small\textit{À l'écran :} #3}}\par}
+
+\title{Script de la vidéo (10 minutes maximum)}
+\author{Projet IMA -- édition de Poisson par Fourier}
+\date{}
+
+\begin{document}
+\maketitle
+
+\textbf{Principe.} Neuf parties, environ 9 min 20 au total, pour garder une marge sous les 10 minutes.
+Le texte est écrit pour être dit à voix haute, à un rythme posé (environ 140 mots par minute) ; il n'a
+pas besoin d'être lu mot pour mot. À l'écran : les figures du rapport (dossier \texttt{docs/rapport/figures/}), en plein
+écran ou deux par deux. Le temps indiqué à droite est le moment où la partie commence.
+
+%------------------------------------------------------------------
+\partie{1. Le problème}{0:00 -- 0:50}{titre du projet, puis la figure 9 de l'article et mon résultat
+(\texttt{article\_collage.png}, colonne de droite).}
+
+Bonjour. Mon projet porte sur l'article de Morel, Petro et Sbert, « Fourier implementation of Poisson
+image editing ». L'édition de Poisson consiste à modifier une image non pas en changeant ses valeurs, mais
+en changeant son gradient : on impose le gradient voulu, et on cherche l'image dont le gradient en est le
+plus proche. C'est ce qui permet de coller un objet sans couture, ou d'éclaircir une zone sans créer de
+bord. L'idée de l'article est de résoudre ce problème sur toute l'image, d'un seul coup, par transformée
+de Fourier. J'ai réimplémenté la méthode, reproduit ses expériences, analysé ses défauts, et je l'ai
+appliquée à des images médicales, en 2D et en 3D.
+
+%------------------------------------------------------------------
+\partie{2. La méthode}{0:50 -- 2:00}{l'équation $\min\int|\nabla u - V|^2$, puis $\Delta u =
+\operatorname{div}V$, puis l'éq.~12 encadrée. Éventuellement un schéma : image, image miroir $2H\times2W$.}
+
+On cherche l'image $u$ qui minimise l'écart entre son gradient et un champ $V$. Cela revient à résoudre
+l'équation de Poisson : le laplacien de $u$ égale la divergence de $V$, avec une condition de Neumann au
+bord.
+
+Pour la résoudre par Fourier, on prolonge l'image par symétrie miroir : on obtient une image deux fois
+plus grande, périodique et sans saut, ce qui donne la condition de Neumann gratuitement. En Fourier,
+dériver revient à multiplier par $iw$. L'équation de Poisson devient donc une simple division, coefficient
+par coefficient : c'est l'équation 12. Trois FFT, un coût en $N\log N$, quelle que soit la forme de la
+zone modifiée.
+
+En codant, j'ai dû régler quatre points que l'article ne détaille pas : le recentrage des fréquences, un
+signe, la fréquence nulle, et le retour du résultat dans $[0,255]$.
+
+%------------------------------------------------------------------
+\partie{3. Vérification}{2:00 -- 2:40}{le tableau 1 du rapport (MSE, PSNR).}
+
+Premier test : si on donne au solveur le gradient de l'image elle-même, on doit retrouver l'image. C'est
+le cas à la précision de la machine : un PSNR d'environ 320 décibels, contre 70 à 96 dans l'article. Et
+si on remplace le gradient spectral par une simple différence finie, on tombe à 39 décibels, avec des
+erreurs de plus de 100 niveaux de gris sur les contours. La raison : la différence finie mesure la pente
+entre deux pixels, et le solveur, qui divise par $iw$, reconstruit alors une image décalée d'un
+demi-pixel et floutée. Le gradient et le solveur doivent être exactement l'inverse l'un de l'autre.
+
+%------------------------------------------------------------------
+\partie{4. Le gradient spectral sur des images simples}{2:40 -- 4:00}{\texttt{gibbs.png}.}
+
+Pour comprendre la méthode, j'ai utilisé une image dont on connaît tout : un carré clair sur fond sombre.
+
+Sur un bord net, le gradient spectral oscille : 104, puis $-46$, 29, $-21$, et ça ne décroît qu'en
+$1/k$. C'est l'effet de Gibbs : pour fabriquer un saut avec des sinusoïdes, la courbe interpolée doit
+onduler. J'ai retrouvé exactement ces valeurs par le calcul : ce sont les restes de la série harmonique
+alternée, en commençant par $\Delta \ln 2$. Dès que le bord est un peu flou, les oscillations
+disparaissent.
+
+Ces oscillations se compensent dans la reconstruction, mais apparaissent dès qu'on modifie le gradient.
+Enfin, avec du bruit, le gradient spectral multiplie l'écart type par 1,8, contre 1,4 pour une différence
+finie, comme le prévoit la théorie.
+
+%------------------------------------------------------------------
+\partie{5. Rehaussement de contraste et zones noires}{4:00 -- 5:30}{\texttt{contraste\_simple.png},
+en insistant sur le profil (d).}
+
+La première application de l'article est le rehaussement de contraste : on multiplie par $\alpha = 2{,}5$
+le gradient des pixels plus sombres qu'un seuil $T$. Le contraste dans le sombre est bien multiplié par
+2,5. Mais j'ai observé un défaut que l'article ne mentionne pas : une zone sombre entourée de clair
+devient noire, elle passe même sous zéro.
+
+L'explication est le bord. Le gradient spectral répartit le saut de part et d'autre du bord : la moitié
+du côté sombre est sous le seuil, donc multipliée par $\alpha$. Le champ demande un saut supplémentaire
+de $(\alpha - 1)$ fois la moitié du saut, et comme la moyenne de l'image est fixée, ce saut est réparti :
+le clair monte et le sombre descend. Ce n'est pas seulement un effet de Gibbs : avec un bord doux, la
+zone sombre descend quand même.
+
+Pour éviter ces zones noires, j'ai proposé un étirement min-max : on décale l'image pour que son minimum
+soit 0, puis on la multiplie pour que son maximum soit 255. Plus rien n'est écrêté, la zone sombre
+redevient grise. Cet étirement a deux défauts : il dépend de deux pixels seulement, souvent des
+dépassements de Gibbs, ce qui peut rendre toute l'image terne ; et en couleur, il crée des taches dans
+les zones presque noires, que j'ai corrigées en ajoutant une petite constante au dénominateur.
+
+%------------------------------------------------------------------
+\partie{6. Comparaison avec l'article}{5:30 -- 6:30}{\texttt{article\_contraste.png} puis
+\texttt{article\_collage.png}.}
+
+J'ai ensuite appliqué mon code aux images de l'article. Le masque de la zone sombre coïncide avec le sien
+à 97 à 99\,\%. Ses résultats publiés sont plus clairs que l'image $u$ brute, ce qui confirme qu'il
+applique un étirement qu'il ne décrit pas. Avec mon étirement min-max, la zone sombre est éclaircie comme
+dans l'article ; sur le jockey, le ciel est un peu plus terne, c'est le défaut dont je viens de parler.
+
+Pour le collage et le mélange de gradients, mes résultats sont visuellement identiques aux siens : le
+bateau cloné, le faon effacé, le texte sur le bois, la texture sur la texture.
+
+%------------------------------------------------------------------
+\partie{7. Collage : ce qui se passe hors du masque}{6:30 -- 7:00}{\texttt{section5.png} (courbe de
+l'écart en fonction de la distance).}
+
+Comme on résout sur toute l'image, sans condition au bord du masque, l'extérieur est un peu modifié :
+jusqu'à 59 niveaux de gris au bord, encore 7 à 60 pixels. Il n'y a pas d'oscillation, mais un décalage
+lent. C'est la limite que l'article reconnaît lui-même.
+
+%------------------------------------------------------------------
+\partie{8. Application à l'imagerie médicale}{7:00 -- 8:30}{\texttt{thorax\_contraste.png},
+\texttt{nodules.png}, \texttt{effacement.png}.}
+
+J'ai appliqué la méthode à des images médicales. Sur une radio du thorax, le seuil de 50 de l'article ne
+sélectionne presque rien ; avec un seuil automatique qui couvre 25\,\% de l'image, on sélectionne les
+poumons, et la trame vasculaire devient nettement plus visible.
+
+Le collage permet d'insérer une lésion : j'ai collé une zone de poumon avec des nodules dans un poumon
+sain. Avec le collage simple, les côtes disparaissent dans la zone ; avec le mélange de gradients, elles
+sont conservées. Avec la même image comme source, on peut aussi effacer les marqueurs écrits sur la
+radio, sans couture.
+
+Enfin, la méthode s'étend directement aux volumes, avec une FFT en 3D, et il faut bien traiter le volume
+en entier : coupe par coupe, chaque coupe reçoit son propre décalage et des stries apparaissent. Mais sur
+une IRM, le rehaussement n'apporte rien : la zone sombre est surtout l'air et le liquide, et l'image
+devient grise. Cette méthode n'est pas adaptée à tous les types d'images.
+
+%------------------------------------------------------------------
+\partie{9. Conclusion}{8:30 -- 9:20}{la liste des limites de la discussion, puis une image finale
+(par exemple \texttt{thorax\_contraste.png}).}
+
+Pour conclure : la méthode est exacte, simple et rapide, et elle se généralise sans difficulté à la 3D.
+Mais mon analyse montre ses limites : le gradient spectral oscille près des bords nets, le collage modifie
+un peu l'extérieur du masque, le rehaussement de contraste peut noircir les zones sombres et amplifie le
+bruit autant que le signal. Mon étirement min-max évite les zones noires, mais dépend des pixels
+extrêmes. Les suites naturelles seraient un étirement par percentiles, et le traitement des volumes à
+pleine résolution. Merci.
+
+%------------------------------------------------------------------
+\bigskip
+\hrule
+\medskip
+\textbf{Conseils pour l'enregistrement.}
+\begin{itemize}
+  \item Chronomètre-toi une première fois : si tu dépasses 9 min 30, raccourcis d'abord la partie 7
+  (collage hors du masque), puis la partie 6.
+  \item Pour chaque figure, montre du doigt (ou au curseur) ce dont tu parles : le profil sous zéro,
+  les stries de l'IRM, les côtes dans la zone collée.
+  \item Ne lis pas les formules en entier : montre l'équation 12 et dis « une simple division,
+  coefficient par coefficient ».
+  \item Si on te pose des questions sur l'IRM, voir \texttt{docs/explications/irm\_3d.pdf}.
+\end{itemize}
+
+\end{document}
